@@ -196,7 +196,18 @@ mess = mess & VBCrLf
 'INFORMACIO PANTALLA PER POWERSHELL '----( executa el powershell info_monitor.ps1)  --------------------------------------------------------------------
 mess = mess & "PANTALLA" & VBCrlf
 mess = mess & "------------------------" & VBCrlf
-strInstruccio = "powershell -file info_monitor.ps1 "
+
+'HABILITA FUNCIO D'EXECUCIO D'SCRIPTS POWERSHELL EN EQUIP QUE EXECUTA SCRIPT (local)
+strInstruccio0 = "powershell.exe Set-ExecutionPolicy Unrestricted"
+strDosCommand0 = strInstruccio0
+Set objShell = CreateObject("Wscript.Shell")
+Set objExec = objShell.Exec(strDOSCommand0)
+strPSResults0 = objExec.StdOut.ReadAll
+
+
+
+
+strInstruccio = "powershell -file info_monitor.ps1"
 strDOSCommand = strInstruccio & " " & strComputer 	'Passa com a parametre d'execució de l'script powershell(.ps1) el host a analitzar
 
 'strDOSCommand = "powershell -file -paramter info_monitor.ps1"
