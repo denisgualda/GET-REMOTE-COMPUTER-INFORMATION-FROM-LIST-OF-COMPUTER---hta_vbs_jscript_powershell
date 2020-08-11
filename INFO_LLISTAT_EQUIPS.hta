@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>INFO. EQUIPS REMOTS</title>
+ 
+    <HTA:APPLICATION
+        APPLICATIONNAME = "INFORMACIO EQUIPS REMOT"
+		id="INFORMACIO EQUIPS REMOT"
+		name="INFORMACIO EQUIPS REMOT"
+    />
+	
+	<script language="vbscript">
+	
+	Const ForWriting = 0
+	Const ForAppending = 8
+	Const HKEY_LOCAL_MACHINE = &H80000002
+
+	Dim strLogFile, strDate, mess, item, objSWbemServices, objSWbemLocator,  strComputer
+
+	
+	'GUARDA TEMPORALMENT EN FITXER DE TEXT PER LECTURA'
+	Dim objFSO, objFile, strFileName
+	strFileName = "temp_executa.txt"
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+	
+	Set objFile = objFSO.OpenTextFile(strFileName, 2, true)
+	Set objShell = CreateObject("WScript.Shell")
+
+'-------------------------------------'
+'INICI BOTO EXECUTA'
+	Sub Executa
+		
+		mess = ""
+		sTxtarea = txt_entrada.Value
+		objFile.Write sTxtarea & vbCRLF
+
+		
+		'EXECUTA BUSCA INFORMACIO EQUIPS REMOTS'
+		'*************************************************************'		
+		Dim objFSO: Set objFso = CreateObject("Scripting.FileSystemObject")
+		Set objReadFile= objFSO.OpenTextFile(strFileName, 1)		
+		
+
+		Do While Not objReadFile.AtEndOfStream
+				StrComputer = objReadFile.readline
+
+				'COMPROVA SI EL HOST ES TROBA ACTIU'
+				'----------------------------------------------------'
+ 				host_actiu = actiu(StrComputer) 'COMPROVA ESTAT DEL HOST (actiu /no actiu)'
+			    if host_actiu = true then
+
+		    		'SI CONNECTAT: '
+						
+					mess = mess & "************************************" & VBCrLf
+					mess = mess & strComputer & VBCrLf
+					mess = mess & "************************************" & VBCrLf
+					'strUser = "ADMIN UserName"'
+					'strPassword = "******** ADMIN PASSWORD "'
+
+					'CONNEXIO A EQUIP REMOT (LLEGEIG LINIA DE FITXER)'
+					Set objSWbemLocator = CreateObject("WbemScripting.SWbemLocator")
+					Set objSWbemServices = objSWbemLocator.ConnectServer(strComputer, _
+																		"Root\CIMv2", _
+																		strUser, _
+																		strPassword)
+
+						'*************************************************************'
+						'INFORMACIÓ EQUIP -- HOST NAME I SISTEMA OPERATIU'
+						'*************************************************************'
+						Dim wmiItemsOSinfo
+						Set wmiItemsOSinfo = objSWbemServices.ExecQuery("SELECT * FROM Win32_OperatingSystem")		'INFORMACIO SISTEMA OPERATIU'
+						For each item in wmiItemsOSinfo
+							With item
+							mess = mess & " HOSTNAME:	" & .CSName & VBCrlf
+							mess= mess & " SISTEMA OPERATIU:	" & .Caption & " " & .OSArchitecture & VBCrlf
+					
+							End With
+						Next
+
+						'INFORMACIO USUARI LOGUEJAT'
+						'***************************************************************'
+						ComputerName ="."
+						Set wmiServiceusuari = GetObject("winmgmts:\\" & StrComputer)
+						Dim wmiItemusuari
+						Set wmiItemusuari = wmiServiceusuari.ExecQuery("SELECT * FROM Win32_ComputerSystem")
+						For Each item in wmiItemusuari
+							With item
+								mess = mess & " USUARI LOGUEJAT:	" & .UserName & VBCrlf
+							End With
+						Next
+
+						'LLEGIR REGISTRE  (PLATAFORMA (DEPARTAMENT/ORGANISME)'
+						'***************************************************************'
+						Set oReg=GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & _
+							strComputer & "\root\default:StdRegProv")
+
+						'CONSULTA HKEY_LOCAL_MACHINE\SOFTWARE\PLATAFORMA\INFORMACION_PUESTO ---> Departament -- Organisme'
+						strKeyPath = "SOFTWARE\Plataforma\Informacion_Puesto"
+						strDepartament = "Departament"
+						strOrganisme = "Organisme"
+
+						oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strDepartament,strValue
+						mess = mess & "     >> Departament: " & strValue & VBCrlf
+						oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strOrganisme,strValue
+						mess = mess & "     >> Organisme: " & strValue & VBCrlf
+						
+
+						'CONSULTA HKEY_LOCAL_MACHINE\SOFTWARE\PLATAFORMA\MASTER ---> Display Version'
+						strKeyPath = "SOFTWARE\Plataforma\MASTER"
+						strVersioMaqueta = "DisplayVersion"
+
+						oReg.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strVersioMaqueta,strValue
+						strValue = right(strValue,5)
+						mess = mess & "     >> Versio maqueta: " & strValue & VBCrlf
+						mess= mess & VBCrlf
+
+						'***************************************************************'
+
+						'INFORMACIO DE LEQUIP - MODEL I N/S'
+						'***************************************************************'
+						Dim wmiItemsSysinfo
+						Set wmiItemsSysinfo = objSWbemServices.ExecQuery("SELECT * FROM Win32_ComputerSystemProduct")		'Informacio de l'equip
+						For Each item in wmiItemsSysinfo
+							With item
+								mess = mess & " MODEL:	" & .Vendor & " " & .Name & VBCrlf
+								mess = mess & " S/N: " & .IdentifyingNumber & VBCrlf
+							End With
+						Next
+
+
+						'INFORMACIO CPU'
+						'***************************************************************'
+						ComputerName = "."
+						Set wmiService = GetObject("winmgmts:\\" & StrComputer)
+						Set wmiItems = wmiService.ExecQuery("SELECT * FROM win32_Processor")
+						For Each item in wmiItems
+							With item
+								mess = mess & "     >> CPU: " & .Name & .AddressWidth & VBCrlf
+							End With
+						Next
+
+						'INFORMACIO RAM'
+						'***************************************************************'
+						Dim wmiItemsMemory
+						Set wmiItemsMemory = objSWbemServices.ExecQuery("SELECT * FROM win32_PhysicalMemory")
+						For Each item in wmiItemsMemory
+							With item
+								mess = mess & "     >> RAM:	" & left(.Capacity/1024^3,6) & " GB " & VBCrlf
+							End With
+						Next
+
+						'INFORMACIO DISC'
+						'***************************************************************'
+						Dim wmiItemsDisk
+						Set wmiItemsDisk = objSWbemServices.ExecQuery("SELECT * FROM win32_LogicalDisk")
+						For Each item in wmiItemsDisk
+							With item
+								mess = mess & "     >> DISC: Espai lliure:	" & .Caption & " " & left(.FreeSpace/1024^3,3) & " GB " & "/ " & left(.Size/1024^3,3) & " GB" & VBCrlf
+							End With
+						Next
+
+
+						
+						'INFORMACIO XARXA'
+						'***************************************************************'
+						mess = mess & VBCrlf
+						Set wmiItemsxarxa = objSWbemServices.ExecQuery("SELECT * FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = True")
+						For Each item in wmiItemsxarxa
+							With item
+								mess = mess & "ADAPTADOR DE XARXA: " & .Description & VBCrLf
+								For Each strIPSubnet in .IPSubnet
+									subxarxa= subxarxa & strIPSubnet
+									'*******************************************************************************************************************************'
+									'Retallem els 2 últims digits que agafa de la Mascara de subxarxa (64) per deixar unicament els 12 digits vàlids 255.255.255.255'
+									subxarxa = Left(subxarxa,15)
+								Next
+								For Each strIPAddress in .IPaddress 
+
+									mess = mess & "     >> IP: " & strIPAddress & " /  " & subxarxa & VBCrLf 
+									mess = mess & "     >> MAC: " & .MACAddress & VBCrLf
+								Next
+								mess = mess & "     >> DHCP Habilitat: " & .DHCPEnabled & VBCrlf
+							End With
+						Next
+						mess = mess & VBCrlf
+
+
+						'INFORMACIO PANTALLA'
+						 'PER POWERSHELL ----( executa el powershell info_monitor.ps1)  --------------------------------------------------------------------'
+						'***************************************************************'
+						mess = mess & "PANTALLA:" 
+
+						'HABILITA FUNCIO D'EXECUCIO D'SCRIPTS POWERSHELL EN EQUIP QUE EXECUTA SCRIPT (local)'
+						strInstruccio0 = "powershell.exe Set-ExecutionPolicy Unrestricted"
+						strDosCommand0 = strInstruccio0
+						Set objShell = CreateObject("Wscript.Shell")
+						Set objExec = objShell.Exec(strDOSCommand0)
+						strPSResults0 = objExec.StdOut.ReadAll
+
+						strInstruccio = "powershell -file info_monitor.ps1"
+						strDOSCommand = strInstruccio & " " & strComputer 	'Passa com a parametre dexecucio de lscript powershell(.ps1) el host a analitzar'
+						Set objShell = CreateObject("Wscript.Shell")
+						Set objExec = objShell.Exec(strDOSCommand)
+						strPSResults = objExec.StdOut.ReadAll
+
+						mess = mess & strPSresults
+
+		
+					''
+					'***************************************************************'
+					'MOSTRA PER PANTALLA RESUTLATS DE CADA EQUIP'
+					'***************************************************************'
+
+					mess = mess & VBCrlf
+					mess = mess & "----------------------------------------------------------------" & VBCrlf
+					mess = mess & VBCrlf
+
+					'ESCRIU PER PANTALLA INFORMACIO RECOPILADA'	
+					
+
+				'SINO CONNECTAT ' 
+
+				else 
+					mess = mess & "************************************" & VBCrLf
+					mess = mess & strComputer & VBCrLf
+					mess = mess & "************************************" & VBCrLf
+					mess = mess & VBCrLf
+					mess = mess & " EQUIP NO ACCESSIBLE - Comprovar que l'equip es troba iniciat o existeix." & VBCrlf
+					mess = mess & vbCRLF
+					mess = mess & "----------------------------------------------------------------" & VBCrlf
+					mess = mess & vbCRLF
+
+				end if
+
+				txt_sortida.value = mess
+	
+		Loop
+
+	objFile.close
+
+	'NETEJA FITXER TXT PER MOSTRAR DE NOU RESULTATS '
+	neteja_fitxer
+
+End Sub
+'FI BOTO EXECUTA'
+'-------------------------------------'
+	
+'---------------------------------------------------'
+'FUNCIO EXECUTA PING'
+function actiu(strhost)
+    Set oWMI = GetObject("winmgmts:\\.\root\cimv2")
+    Set oPing = oWMI.Get("Win32_PingStatus.Address='"& strhost & "'")
+    If oPing.StatusCode = 0 Then 
+        actiu = true
+    Else
+        actiu = false
+    End If
+end function
+'---------------------------------------------------'
+
+'FUNCIO NETEJA FITXER'
+function neteja_fitxer
+	strFileName = "temp_executa.txt"
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+	
+	Set objFile = objFSO.OpenTextFile(strFileName, 2, true)
+	Set objShell = CreateObject("WScript.Shell")
+	objFile.Write ""
+end function
+
+
+
+
+	
+	</script>
+	
+	</head>
+ 
+<body>
+    
+    	<h1>Mostra info d'equips remots</h1>
+    	<p><b>Escriu llistat d'equips (IP / HOSTNAME)<b></p>
+	
+
+	<!-- CAIXA TEXT ENTRADA DADES --> 
+
+	<textarea name="txt_entrada" id="TextFile" rows="10" cols="90"></textarea>
+	<br>
+	<br>
+    <input type="button" value="Executa" onclick="Executa">
+    <br>
+	<br>
+
+    <!-- CAIXA TEXT RESULTAT -->
+    <textarea name="txt_sortida" rows=60  cols=90></textarea>
+	
+</body>
+ 
+</html>
